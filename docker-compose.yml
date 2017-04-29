@@ -1,0 +1,73 @@
+version: '3'
+
+services:
+  kong-database:
+    image: postgres:9.5.6
+    ports:
+     - 5433:5432
+    environment:
+     - POSTGRES_USER=kong
+     - POSTGRES_DB=kong
+    volumes:
+     - ./postgres/data:/var/lib/postgresql/data
+    networks:
+        - web
+  kong:
+    image: kong:0.10.1
+    container_name: kong
+    environment:
+     - KONG_DATABASE=postgres 
+     - KONG_PG_HOST=kong-database
+    ports:
+     - "7010:8000"
+     - "7011:8443"
+     - "7012:8001"
+     - "7013:7946"
+     - "7014:7946/udp"
+    depends_on:
+     - kong-database
+     - stat
+    labels:
+        - traefik.port=8000
+        - traefik.frontend.rule=Host:api.services.alin.be
+        - traefik.backend=api
+        - traefik.frontend.entryPoints=http,https
+    networks:
+        - web
+  dashboard:
+    image: haha1903/kong-dashboard 
+#pgbi/kong-dashboard:v1.3.1 doesn't work with kong 0.10
+    container_name: kong-dashboard
+    ports:
+     - "7015:8080"
+    labels:
+        - traefik.port=8080
+        - traefik.frontend.rule=Host:apidashboard.services.alin.be
+        - traefik.backend=apidashboard
+        - traefik.frontend.entryPoints=http,https
+    networks:
+        - web
+  stat:
+    expose:
+     - 8125
+     - 7017
+    image: kamon/grafana_graphite:3.0
+    volumes:
+     - ./grafana/data:/opt/grafana/data
+    ports:
+     - "7016:80"
+     - "7017:8125/udp"
+     - "7018:8126"
+     - "7051:81"
+    labels:
+        - traefik.port=80
+        - traefik.frontend.rule=Host:apistat.services.alin.be
+        - traefik.backend=apistat
+        - traefik.frontend.entryPoints=http,https
+    networks:
+        - web
+
+networks:
+  web:
+    external:
+      name: traefik_webgateway
