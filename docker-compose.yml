@@ -2,7 +2,7 @@ version: '3'
 
 services:
   kong-database:
-    image: postgres:9.5.6
+    image: postgres:9.6.3
     ports:
      - 5433:5432
     environment:
@@ -13,7 +13,7 @@ services:
     networks:
         - web
   kong:
-    image: kong:0.10.2
+    image: kong:0.10.3
     container_name: kong
     environment:
      - KONG_DATABASE=postgres 
@@ -35,8 +35,9 @@ services:
     networks:
         - web
   dashboard:
-    image: haha1903/kong-dashboard 
+#    image: haha1903/kong-dashboard 
 #pgbi/kong-dashboard:v1.3.1 doesn't work with kong 0.10
+    image: pgbi/kong-dashboard:v2.1.1
     container_name: kong-dashboard
     ports:
      - "7015:8080"
