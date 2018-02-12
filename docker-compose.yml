@@ -1,74 +1,90 @@
-version: '3'
+version: '3.5'
 
 services:
   kong-database:
-    image: postgres:9.6.3
-    ports:
-     - 5433:5432
+    image: postgres:10.1-alpine
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      restart_policy:
+        condition: on-failure
     environment:
      - POSTGRES_USER=kong
      - POSTGRES_DB=kong
     volumes:
      - ./postgres/data:/var/lib/postgresql/data
-    networks:
-        - web
-  kong:
-    image: kong:0.10.3
-    container_name: kong
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  kong-server:
+    image: kong:0.12.1
+    depends_on:
+      - kong-database
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 100M
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.port=8001
+        - traefik.frontend.rule=Host:api.services.alin.be
+        - traefik.frontend.entryPoints=http,https
+        - traefik.backend.loadbalancer.method=wrr
+        - traefik.docker.network=traefik-net
+    volumes:
+     - ./kong/:/etc/kong/
     environment:
      - KONG_DATABASE=postgres 
      - KONG_PG_HOST=kong-database
-    ports:
-     - "7010:8000"
-     - "7011:8443"
-     - "7012:8001"
-     - "7013:7946"
-     - "7014:7946/udp"
-    depends_on:
-     - kong-database
-     - stat
-    labels:
-        - traefik.port=8000
-        - traefik.frontend.rule=Host:api.services.alin.be
-        - traefik.backend=api
-        - traefik.frontend.entryPoints=http,https
-    networks:
-        - web
+    healthcheck:
+      test: ["CMD-SHELL", "curl -I -s -L http://localhost:8000 || exit 1"]
+      interval: 5s
+      retries: 10
+  
   dashboard:
-#    image: haha1903/kong-dashboard 
-#pgbi/kong-dashboard:v1.3.1 doesn't work with kong 0.10
-    image: pgbi/kong-dashboard:v2.1.1
-    container_name: kong-dashboard
-    ports:
-     - "7015:8080"
-    labels:
+    image: pgbi/kong-dashboard:v3.1.0
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      restart_policy:
+        condition: on-failure
+      labels:
         - traefik.port=8080
         - traefik.frontend.rule=Host:apidashboard.services.alin.be
-        - traefik.backend=apidashboard
         - traefik.frontend.entryPoints=http,https
-    networks:
-        - web
+    command: "start --kong-url http://kong-server"
+
   stat:
-    expose:
-     - 8125
-     - 7017
     image: kamon/grafana_graphite:3.0
-    volumes:
-     - ./grafana/data:/opt/grafana/data
-    ports:
-     - "7016:80"
-     - "7017:8125/udp"
-     - "7018:8126"
-     - "7051:81"
-    labels:
-        - traefik.port=80
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 50M
+      restart_policy:
+        condition: on-failure
+      labels:
+       - traefik.port=80
         - traefik.frontend.rule=Host:apistat.services.alin.be
         - traefik.backend=apistat
         - traefik.frontend.entryPoints=http,https
-    networks:
-        - web
+    volumes:
+     - ./grafana/data:/opt/grafana/data
 
-networks:
-  web:
-    external:
-      name: traefik_webgateway
+#networks:
+#  default:
+#    external:
+#      name: traefik-net
