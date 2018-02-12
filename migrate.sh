@@ -12,6 +12,4 @@ docker run --rm \
     -e "KONG_CASSANDRA_CONTACT_POINTS=kong-database" \
  #   -v $PWD/kong:/usr/local/kong \
     -v $PWS/kong/:/etc/kong/ \
-    kong:0.12 kong migrations up
-
-
+    kong:0.12.1 kong migrations up
