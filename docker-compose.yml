@@ -2,7 +2,7 @@ version: '3.5'
 
 services:
   kong-database:
-    image: postgres:10.1-alpine
+    image: postgres:10.2-alpine
     deploy:
       replicas: 1
       resources:
@@ -23,7 +23,7 @@ services:
       retries: 5
   
   kong-server:
-    image: kong:0.12.1
+    image: kong-image
     depends_on:
       - kong-database
     deploy:
@@ -35,23 +35,21 @@ services:
       restart_policy:
         condition: on-failure
       labels:
-        - traefik.port=8001
+        - traefik.port=8000
         - traefik.frontend.rule=Host:api.services.alin.be
         - traefik.frontend.entryPoints=http,https
         - traefik.backend.loadbalancer.method=wrr
         - traefik.docker.network=traefik-net
-    volumes:
-     - ./kong/:/etc/kong/
+    ports:
+     - 8001:8001
     environment:
      - KONG_DATABASE=postgres 
      - KONG_PG_HOST=kong-database
-    healthcheck:
-      test: ["CMD-SHELL", "curl -I -s -L http://localhost:8000 || exit 1"]
-      interval: 5s
-      retries: 10
   
   dashboard:
     image: pgbi/kong-dashboard:v3.1.0
+    depends_on:
+      - kong-server
     deploy:
       replicas: 1
       resources:
@@ -64,27 +62,34 @@ services:
         - traefik.port=8080
         - traefik.frontend.rule=Host:apidashboard.services.alin.be
         - traefik.frontend.entryPoints=http,https
-    command: "start --kong-url http://kong-server"
+# Pas de curl !! il faudrait refaire l'image
+#    healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8080"]
+#       interval: 1m30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 40s
+    command: "start --kong-url http://kong-server:8001"
 
-  stat:
-    image: kamon/grafana_graphite:3.0
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          cpus: "0.1"
-          memory: 50M
-      restart_policy:
-        condition: on-failure
-      labels:
-       - traefik.port=80
-        - traefik.frontend.rule=Host:apistat.services.alin.be
-        - traefik.backend=apistat
-        - traefik.frontend.entryPoints=http,https
-    volumes:
-     - ./grafana/data:/opt/grafana/data
+#  stat:
+#    image: kamon/grafana_graphite:3.0
+#    deploy:
+#      replicas: 1
+#      resources:
+#        limits:
+#          cpus: "0.1"
+#          memory: 50M
+#      restart_policy:
+#        condition: on-failure
+#      labels:
+#       - traefik.port=80
+#        - traefik.frontend.rule=Host:apistat.services.alin.be
+#        - traefik.backend=apistat
+#        - traefik.frontend.entryPoints=http,https
+#    volumes:
+#     - ./grafana/data:/opt/grafana/data
 
-#networks:
-#  default:
-#    external:
-#      name: traefik-net
+networks:
+  default:
+    external:
+      name: traefik-net
